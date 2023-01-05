@@ -91,11 +91,19 @@ typedef struct basicTUI{
   char *footer; //The closing string of the current UI
 
   char ***option; //Panel of options, each char** pointer is a panel
-
-  char *field[3]; //Extra input field
-
+  
   char ***description; //The description
+
+  char **field; //Extra input field
 }basicTUI;
+
+typedef struct tabTUI{
+  basicTUI* option_per_tab;
+
+  size_t no_tab; //The total number of tabs
+
+  char* tab[]; //The pointer to the tab
+}tabTUI;
 
 /* Color & Decor getters, setters */
 void setDecorChosen(char* start, char* end, char* color);
@@ -105,10 +113,23 @@ void setDecorHead(char* start, char* end, char* color);
 void setColor(char* head, char* footer, char* option, char* chosenOption);
 
 /*Initialize Interface*/
+/**
+ * @brief This function will initilize a basicTUI to be used
+ * 
+ * @param title The title line
+ * @param footer The footer line
+ * @param no_of_option_per_panel Number of option per panel (AKA COLUMNS)
+ * @param no_panel The total number of panel (AKA ROWS)
+ * @param no_field The total number of field (optional field, use macro NO_FIELD to left blank)
+ * @param option The pointer to option 
+ * @param description The pointer to description
+ * @param field The pointer to field
+ * @return basicTUI* A malloced pointer to basicTUI instance
+ */
 basicTUI* initBasicTUI_Arr(char* title, char* footer, size_t no_of_option_per_panel, size_t no_panel, size_t no_field, char* option[no_panel][no_of_option_per_panel], char* description[no_panel][no_of_option_per_panel], char* field[]);
 
 /*Running Interface (radio & checkboxes)*/
-uint8_t* runBasicTUI_checkboxes(basicTUI* TUI, char* submitKey); //Reimplementing
+char** runBasicTUI_checkboxes(basicTUI* TUI, char* submitKey); //Reimplementing
 char* runBasicTUI_radio(basicTUI* TUI);
 
 /*Destroy Interface*/

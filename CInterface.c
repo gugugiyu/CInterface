@@ -5,6 +5,8 @@
 #include <termios.h>            
 #include <unistd.h> 
 #include <errno.h>
+#include <sys/select.h>
+#include <sys/time.h>
 
 #include "./CInterface.h"
 
@@ -93,17 +95,16 @@ void setColor(char* head, char* footer, char* option, char* chosenOption){
 /**
  * @brief This function will initilize a basicTUI to be used
  * 
- * @param title 
- * @param footer 
- * @param no_of_option_per_panel 
- * @param no_panel 
- * @param no_field 
- * @param option 
- * @param description 
- * @param field 
- * @return basicTUI* 
+ * @param title The title line
+ * @param footer The footer line
+ * @param no_of_option_per_panel Number of option per panel (AKA COLUMNS)
+ * @param no_panel The total number of panel (AKA ROWS)
+ * @param no_field The total number of field (optional field, use macro NO_FIELD to left blank)
+ * @param option The pointer to option 
+ * @param description The pointer to description
+ * @param field The pointer to field
+ * @return basicTUI* A malloced pointer to basicTUI instance
  */
-
 basicTUI* initBasicTUI_Arr(char* title, char* footer, size_t no_of_option_per_panel, size_t no_panel, size_t no_field, char* option[no_panel][no_of_option_per_panel], char* description[no_panel][no_of_option_per_panel], char* field[]){
   basicTUI* returnTUI = malloc(sizeof(basicTUI));
 
@@ -161,9 +162,11 @@ basicTUI* initBasicTUI_Arr(char* title, char* footer, size_t no_of_option_per_pa
 
   if (description == NO_DESCRIPTION)
     returnTUI->description[0][0] = NULL;
-  
+
   if (field != NO_FIELD){
-    /*Adding the field*/
+    returnTUI->field = malloc(sizeof(char*) * no_field);
+    if (!returnTUI->field) goto ERROR_NULL_MALLOC;
+
     for (int i = 0; i < no_field; i++){
       returnTUI->field[i] = malloc(strlen(field[i]) + 1);
       if (!returnTUI->field[i]) goto ERROR_NULL_MALLOC;
@@ -184,129 +187,171 @@ basicTUI* initBasicTUI_Arr(char* title, char* footer, size_t no_of_option_per_pa
     return NULL;
 }
 
-// /**
-//  * @brief Initialization function for descriptionTUI that using a double pointer to the string
-//  * 
-//  * @param title The given title for this current TUI
-//  * @param footer The given footer for this current TUI
-//  * @param no_of_option The total number of option for this current TUI
-//  * @param content The option (must match the no_of_option parameter)
-//  * @param description The description for the following option (Left NULL if don't have)
-//  * @return basicTUI* The initialized framework
-//  */
+char** runBasicTUI_checkboxes(basicTUI* TUI, char* submitKey){
+  if (*submitKey == 13 /*Enter*/ || *submitKey == '[' || *submitKey == 27 /* ESC key */) goto INVALID_SUBMIT_KEY;
 
-// uint8_t* runBasicTUI_checkboxes(basicTUI* TUI, char* submitKey){
-//   if (*submitKey == 13 /*Enter*/ || *submitKey == '[') return NULL;
+  static struct termios oldt, newt;
 
-//   static struct termios oldt, newt;
+  //Store the old attribute
+  tcgetattr( STDIN_FILENO, &oldt);
 
-//   //Store the old attribute
-//   tcgetattr( STDIN_FILENO, &oldt);
+  //Set the new attribute, revert the flag
+  newt = oldt;
+  newt.c_lflag &= ~(ICANON);         
 
-//   //Set the new attribute, revert the flag
-//   newt = oldt;
-//   newt.c_lflag &= ~(ICANON);         
+  tcsetattr(STDIN_FILENO, TCSANOW, &newt);
 
-//   tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+  uint64_t optionCursorX = 0, optionCursorY = 0;
+  char  **optionArray = malloc(sizeof(char*) * TUI->no_panels);
 
-//   uint64_t optionCursor = 0;
-//   uint8_t *optionArray = malloc(sizeof(uint64_t) * TUI->no_options);
-//   memset(optionArray, 0, sizeof(uint64_t) * TUI->no_options);
-//   //optionArray[0] = 1;
-
-//   int InputReceiver = -1;
-
-//   #define ENTER 10
-//   do {
-//     __CLEAR_SCREEN;
-//     /* Logic flow of the selection */
-//     switch(InputReceiver){
-//       case KEY_UP:
-//         if (optionCursor > 0)
-//           optionCursor--;
-//         break;
-
-//       case KEY_DOWN:
-//         if (optionCursor < TUI->no_options - 1)
-//           optionCursor++;
-//           break;
-
-//       /* Register option */
-//       case ENTER:
-//         optionArray[optionCursor] = 1 - optionArray[optionCursor];
-          
-//         break;
-//       default: break;
-//     }
-//   #undef ENTER
-
-//     char* optionModeStart;
-//     char* optionModeEnd;
-//     char* constructBuffer = malloc(BUFFER_MEDIUM);
-//     memset(constructBuffer, 0, BUFFER_MEDIUM);
-
-//     if (InputReceiver == 27 /* \033 value*/ || InputReceiver == '[')
-//       continue;
-    
-//     /* Print the head */
-//     color(DECOR_HEAD_COLOR);
-
-//     strncat(constructBuffer, DECOR_HEAD_START, strlen(DECOR_HEAD_START));
-//     strncat(constructBuffer, TUI->head, strlen(TUI->head));
-//     strncat(constructBuffer, DECOR_HEAD_END, strlen(DECOR_HEAD_END));
-
-//     printf("%s\n\n", constructBuffer);
-//     fflush(stdin);
-//     free(constructBuffer);
-
-//     constructBuffer = NULL;
-
-//     /* Print the options */
-//     for (int i = 0; i < TUI->no_options; i++){
-//       constructBuffer = malloc(BUFFER_MEDIUM);
-//       memset(constructBuffer, 0, BUFFER_MEDIUM);
-
-//       optionModeStart = (optionArray[i]) ? DECOR_OPTION_CHOSEN_START : DECOR_OPTION_START;
-//       optionModeEnd =   (optionArray[i]) ? DECOR_OPTION_CHOSEN_END : DECOR_OPTION_END;
-
-//       color(optionArray[i] ? DECOR_OPTION_CHOSEN_COLOR : DECOR_OPTION_COLOR); //Set the corresponding color
-
-//       strncpy(constructBuffer, optionModeStart, strlen(optionModeStart));
-//       strncat(constructBuffer, TUI->option[i], strlen(TUI->option[i]));
-//       strncat(constructBuffer, optionModeEnd, strlen(optionModeEnd));
-
-//       //Give the extra notifier at first
-//       if (i == optionCursor){color(WHITE_B); printf(">  ");  color(optionArray[i] ? DECOR_OPTION_CHOSEN_COLOR : DECOR_OPTION_COLOR);}
-//       printf("%s\n", constructBuffer);
-      
-//       free(constructBuffer);
-//       constructBuffer = NULL;
-//     }
-//     /* Print the footer */
-
-//     constructBuffer = malloc(BUFFER_MEDIUM);
-//     memset(constructBuffer, 0, BUFFER_MEDIUM);
-//     color(DECOR_END_COLOR);
-
-//     strncpy(constructBuffer, DECOR_END_START, strlen(DECOR_END_START));
-//     strncat(constructBuffer, TUI->footer, strlen(TUI->footer));
-//     strncat(constructBuffer, DECOR_END_END, strlen(DECOR_END_END));
-    
-//     printf("\n%s\n", constructBuffer);
-
-//     free(constructBuffer);
-//     constructBuffer = NULL;
-
-//     //Just in case the program get cancel out
-//     color(WHITE);
-//   }while ((InputReceiver = getchar()) != *submitKey);
+  for (int i = 0; i < TUI->no_panels; i++)
+    optionArray[i] = calloc(TUI->no_options_per_panel, 1);
   
-//   /*restore the old settings*/
-//   tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
-//   color(WHITE);
+  optionArray[optionCursorY][optionCursorX] = 1;
 
-//   return optionArray;
-// }
+  char InputReceiver = -1;
+
+  #define ENTER 10
+  #define ESC 27
+  do {
+    __CLEAR_SCREEN;
+    /* Logic flow of the selection */
+    switch(InputReceiver){
+      case KEY_UP:
+        if (optionCursorY > 0)
+          optionCursorY--;
+        break;
+
+      case KEY_DOWN:
+        if (optionCursorY < TUI->no_panels - 1)
+          optionCursorY++;
+          break;
+      
+      case KEY_RIGHT:
+        if (optionCursorX > 0)
+          optionCursorX--;
+          break;
+
+      case KEY_LEFT:
+        if (optionCursorX < TUI->no_options_per_panel - 1)
+          optionCursorX++;
+          break;
+
+      /* Register option */
+      case ENTER:
+        optionArray[optionCursorY][optionCursorX] = 1 - optionArray[optionCursorY][optionCursorX];
+        break;
+
+      case ESC:;
+        fd_set set;
+        struct timeval timeout;
+        FD_ZERO(&set);
+        FD_SET(STDIN_FILENO, &set);
+        timeout.tv_sec = 0;
+        timeout.tv_usec = 0;
+        int retR = select(1, &set, NULL, NULL, &timeout);
+
+        if (retR != 1 && retR != -1)
+            goto ACTION_CANCELLED;
+      break;  
+      default: break;
+    }
+  #undef ENTER
+  #undef ESC
+
+    char* optionModeStart;
+    char* optionModeEnd;
+    char* constructBuffer = malloc(BUFFER_MEDIUM);
+    memset(constructBuffer, 0, BUFFER_MEDIUM);
+
+    /* Print the head */
+    color(DECOR_HEAD_COLOR);
+
+    strncat(constructBuffer, DECOR_HEAD_START, strlen(DECOR_HEAD_START));
+    strncat(constructBuffer, TUI->head, strlen(TUI->head));
+    strncat(constructBuffer, DECOR_HEAD_END, strlen(DECOR_HEAD_END));
+
+    printf("%s\n\n", constructBuffer);
+    fflush(stdin);
+    free(constructBuffer);
+
+    constructBuffer = NULL;
+
+    /* Print the options */
+    for (int i = 0; i < TUI->no_panels; i++){
+        for (int j = 0; j < TUI->no_options_per_panel; j++){
+          constructBuffer = calloc(__GLOBAL_BUFFER_SIZE, 1);
+
+          optionModeStart = (optionArray[i][j]) ? DECOR_OPTION_CHOSEN_START : DECOR_OPTION_START;
+          optionModeEnd =   (optionArray[i][j]) ? DECOR_OPTION_CHOSEN_END : DECOR_OPTION_END;
+
+          color(optionArray[i][j] ? DECOR_OPTION_CHOSEN_COLOR : DECOR_OPTION_COLOR); //Set the corresponding color
+
+          strncpy(constructBuffer, optionModeStart, strlen(optionModeStart));
+          strncat(constructBuffer, TUI->option[i][j], strlen(TUI->option[i][j]));
+          strncat(constructBuffer, optionModeEnd, strlen(optionModeEnd));
+
+          //Give the extra notifier at first
+          if (i == optionCursorY && j == optionCursorX){color(WHITE_B); printf(">  ");  color(optionArray[i][j] ? DECOR_OPTION_CHOSEN_COLOR : DECOR_OPTION_COLOR);}
+          printf("%-*s", (i == optionCursorY && j == optionCursorX) ? __GLOBAL_INDENT_SIZE -3 : __GLOBAL_INDENT_SIZE,  constructBuffer);
+          
+          free(constructBuffer);
+          constructBuffer = NULL; 
+        }
+        printf("\n");
+    }
+
+    if (TUI->description[optionCursorY][optionCursorX] != NULL){
+            //In case there is a description
+
+            size_t line_length = strlen(DECOR_HEAD_START) + strlen(DECOR_HEAD_END) + strlen(TUI->head) + 2;
+
+            char* line = malloc(line_length);
+            memset(line, '-', line_length - 2);
+            line[line_length - 1] = '\0';
+
+            color(WHITE_B); //Should have be set to custom color for description
+            printf("\n%s\n", line);
+            free(line);
+            
+            printf("Description:\n");
+            printf("%s\n", TUI->description[optionCursorY][optionCursorX]);
+    }
+
+    constructBuffer = NULL;
+
+    /* Print the footer */
+
+    constructBuffer = calloc(__GLOBAL_BUFFER_SIZE, 1);
+    color(DECOR_END_COLOR);
+
+    strncpy(constructBuffer, DECOR_END_START, strlen(DECOR_END_START));
+    strncat(constructBuffer, TUI->footer, strlen(TUI->footer));
+    strncat(constructBuffer, DECOR_END_END, strlen(DECOR_END_END));
+
+    printf("\n%s\n",constructBuffer);
+
+    free(constructBuffer);
+
+    if (InputReceiver == *submitKey /* Enter key */)
+      break;
+
+    //Just in case the program get cancel out
+    color(WHITE);  
+    
+    read(STDIN_FILENO, &InputReceiver, 1);
+  }while (1);
+  
+  /*restore the old settings*/
+  tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+  color(WHITE);
+
+  return optionArray;
+
+  ACTION_CANCELLED:
+  INVALID_SUBMIT_KEY:
+    return NULL;
+}
 
 /**
  * @brief 
@@ -329,43 +374,53 @@ char* runBasicTUI_radio(basicTUI* TUI){
   tcsetattr( STDIN_FILENO, TCSANOW, &newt);
 
   uint64_t optionCursorX = 0, optionCursorY = 0;
-  int InputReceiver = -1;
-
+  char InputReceiver = -1;
+  #define ESC 27
   do {
     __CLEAR_SCREEN;
     /* Login flow of the selection */
     switch(InputReceiver){
       case KEY_UP:
-        if (optionCursorX > 0)
-          optionCursorX--;
+        if (optionCursorY > 0)
+          optionCursorY--;
         break;
 
       case KEY_DOWN:
-        if (optionCursorX < TUI->no_panels - 1)
-          optionCursorX++;
-          break;
-
-      case KEY_RIGHT:
-        if (optionCursorY > 0)
-          optionCursorY--;
-          break;
-
-      case KEY_LEFT:
-        if (optionCursorY < TUI->no_options_per_panel - 1)
+        if (optionCursorY < TUI->no_panels - 1)
           optionCursorY++;
           break;
 
+      case KEY_RIGHT:
+        if (optionCursorX > 0)
+          optionCursorX--;
+          break;
+
+      case KEY_LEFT:
+        if (optionCursorX < TUI->no_options_per_panel - 1)
+          optionCursorX++;
+          break;
+
+      case ESC:;
+            fd_set set;
+            struct timeval timeout;
+            FD_ZERO(&set);
+            FD_SET(STDIN_FILENO, &set);
+            timeout.tv_sec = 0;
+            timeout.tv_usec = 0;
+            int retR = select(1, &set, NULL, NULL, &timeout);
+
+            if (retR != 1 && retR != -1)
+                goto ACTION_CANCELLED;
+      break;
+
       default: break;
     }
+  #undef ESC
 
     char* optionModeStart;
     char* optionModeEnd;
-    char* constructBuffer = malloc(__GLOBAL_BUFFER_SIZE);
-    memset(constructBuffer, 0, __GLOBAL_BUFFER_SIZE);
+    char* constructBuffer = calloc(__GLOBAL_BUFFER_SIZE, 1);
 
-    if (InputReceiver == 27 /* \033 value*/ || InputReceiver == '[')
-      continue;
-    
     /* Print the head */
     color(DECOR_HEAD_COLOR);
 
@@ -383,13 +438,12 @@ char* runBasicTUI_radio(basicTUI* TUI){
     /* Print the options */
     for (int i = 0; i < TUI->no_panels; i++){
       for (int j = 0; j < TUI->no_options_per_panel; j++){
-        constructBuffer = malloc(__GLOBAL_BUFFER_SIZE);
-        memset(constructBuffer, 0, __GLOBAL_BUFFER_SIZE);
+        constructBuffer = calloc(__GLOBAL_BUFFER_SIZE, 1);
 
-        optionModeStart = (i == optionCursorX && j == optionCursorY) ? DECOR_OPTION_CHOSEN_START : DECOR_OPTION_START;
-        optionModeEnd = (i == optionCursorX && j == optionCursorY) ? DECOR_OPTION_CHOSEN_END : DECOR_OPTION_END;
+        optionModeStart = (i == optionCursorY && j == optionCursorX) ? DECOR_OPTION_CHOSEN_START : DECOR_OPTION_START;
+        optionModeEnd = (i == optionCursorY && j == optionCursorX) ? DECOR_OPTION_CHOSEN_END : DECOR_OPTION_END;
 
-        color(i == optionCursorX && j == optionCursorY ? DECOR_OPTION_CHOSEN_COLOR : DECOR_OPTION_COLOR); //Set the corresponding color
+        color(i == optionCursorY && j == optionCursorX ? DECOR_OPTION_CHOSEN_COLOR : DECOR_OPTION_COLOR); //Set the corresponding color
 
         strncpy(constructBuffer, optionModeStart, strlen(optionModeStart));
         strncat(constructBuffer, TUI->option[i][j], strlen(TUI->option[i][j]));
@@ -403,7 +457,7 @@ char* runBasicTUI_radio(basicTUI* TUI){
       printf("\n");
     }
     /* Print the description */
-    if (TUI->description[optionCursorX][optionCursorY] != NULL){
+    if (TUI->description[optionCursorY][optionCursorX] != NULL){
       //In case there is a description
 
       size_t line_length = strlen(DECOR_HEAD_START) + strlen(DECOR_HEAD_END) + strlen(TUI->head) + 2;
@@ -417,27 +471,33 @@ char* runBasicTUI_radio(basicTUI* TUI){
       free(line);
       
       printf("Description:\n");
-      printf("%s\n", TUI->head);
+      printf("%s\n", TUI->description[optionCursorY][optionCursorX]);
     }
-      
+    
+    constructBuffer = NULL;
+
     /* Print the footer */
 
-    constructBuffer = malloc(__GLOBAL_BUFFER_SIZE);
-    memset(constructBuffer, 0, __GLOBAL_BUFFER_SIZE);
+    constructBuffer = calloc(__GLOBAL_BUFFER_SIZE, 1);
     color(DECOR_END_COLOR);
 
     strncpy(constructBuffer, DECOR_END_START, strlen(DECOR_END_START));
     strncat(constructBuffer, TUI->footer, strlen(TUI->footer));
     strncat(constructBuffer, DECOR_END_END, strlen(DECOR_END_END));
-    
-    printf("\n%s\n", constructBuffer);
+
+    //printf("\n%s\n",constructBuffer);
 
     free(constructBuffer);
-    constructBuffer = NULL;
+
+    if (InputReceiver == 10 /* Enter key */)
+      break;
 
     //Just in case the program get cancel out
-    color(WHITE);
-  }while ((InputReceiver = getchar()) != 10 /* Enter key */);
+    color(WHITE);  
+    
+    read(STDIN_FILENO, &InputReceiver, 1);
+
+  }while (1);
 
 
   /*restore the old settings*/
@@ -458,33 +518,39 @@ char* runBasicTUI_radio(basicTUI* TUI){
     printf("%s\n", line);
     free(line);
 
-    returnBuffer = malloc(__GLOBAL_BUFFER_SIZE);
+    returnBuffer = calloc(__GLOBAL_BUFFER_SIZE, 1);
+    sprintf(returnBuffer, "%d;%d ", optionCursorY, optionCursorX);
     char* tempBuffer = malloc(BUFFER_SMALL);
 
     for (int i = 0; i < TUI->no_field; i++){
       printf("%s: ", TUI->field[i]);
       fgets(tempBuffer, BUFFER_SMALL, stdin);
       strncat(returnBuffer, tempBuffer, strlen(tempBuffer) - 1);
+
+      if (i == TUI->no_field - 1)
+       continue;
+
       strcat(returnBuffer, ",");
     }
     free(tempBuffer);
   }
-
+    
   return returnBuffer;
+
+  ACTION_CANCELLED:
+    return NULL;
 }
 
 void destroyTUI(basicTUI* TUI){
   /* Free the option and description matrice */
-  printf("%p\n", TUI->option[2][3]);
   for (size_t i = 0; i < TUI->no_panels; i++){
-    for (size_t j = 0; j < TUI->no_options_per_panel; i++){
+    for (size_t j = 0; j < TUI->no_options_per_panel; j++){
       free(TUI->option[i][j]);
       free(TUI->description[i][j]);
     }
     free(TUI->option[i]);
     free(TUI->description[i]);
   }
-
   /* Free the field table */
   for (size_t i = 0; i < TUI->no_field; i++)
     free(TUI->field[i]);

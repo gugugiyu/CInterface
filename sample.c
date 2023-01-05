@@ -1,4 +1,6 @@
 #include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
 #include "./CInterface.h"
 
 int main(void){
@@ -6,33 +8,46 @@ int main(void){
   setDecorHead("<- ", " ->", YELLOW);
   setColor(NULL, WHITE_B, WHITE_B, NULL);
 
-  char *header = "What do you like";
+  char *header = "Choose a sort method: ";
 
-  char *footer = "This is the end";
+  char *footer = "End";
 
   char *option[2][5] = {
-    {"Something ?", "Money", "Power", "Good Sleep", "Something again"},
-    {"Yup", "NO", "I don't care", "Okay", "Seems good"}
+    {"Bubble Sort", "Selection Sort", "Insertion Sort", "Quick Sort", "Count sort"},
+    {"Radix Sort",  "Merge Sort",    "Bogo Sort", "Bucket Sort",       "Shell Sort"}
   };
 
   char *description[2][5] = {
-    {"This is comment", "Yeah I know", "Yup", NULL, NULL},
-    {NULL, NULL, NULL, NULL, "Something"}
+    {"Add description here", "Leave NULL for no description in that option", "Use macro NO_DESCRIPTION to indicate no description for the whole panel", NULL, NULL},
+    {NULL,              NULL,          NULL,  NULL, "Lorem Ipsum"}
   };
 
   char *field[] = {
-    "Your age", "My dog's name", "Country"
+    "The field input are treated as a string (type something)", "You can get multiple input by typing in and left a trailing space"
   };
 
   const int ROW = 2;
   const int COL = 5;
-  const int FIELD = 0;
+  const int FIELD = 2;
 
-  basicTUI* test = initBasicTUI_Arr(header, footer, ROW, COL, FIELD, option, NO_DESCRIPTION, NO_FIELD);
+  basicTUI* test = initBasicTUI_Arr(header, footer, COL, ROW, FIELD, option, description, field);
 
-  char* ret = runBasicTUI_radio(test);
+  char* ret;
+  ret  = runBasicTUI_radio(test);
 
-  printf("%s\n", ret);
+  char *coordinate = strtok(ret, ";");
+
+  int x = atoi(coordinate);
+  coordinate = strtok(NULL, ",");
+  int y = atoi(coordinate);
+
+  printf("The chosen sort method is: %s, the input are: ", option[x][y]);
+
+  
+  while ((coordinate = strtok(NULL, " ")) != NULL){
+    printf("[%s]\n", coordinate);
+  }
+
 
   destroyTUI(test);
   return 0;
